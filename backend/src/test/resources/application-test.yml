@@ -1,0 +1,37 @@
+# In-memory H2 (PostgreSQL compatibility mode) so `mvn test` needs no Docker.
+spring:
+  datasource:
+    url: jdbc:h2:mem:cmms-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: false
+
+  mail:
+    host:
+
+app:
+  seed-demo-data: false
+  jwt:
+    secret: integration-test-secret-value-at-least-32-bytes-long
+    expiration-minutes: 60
+  alerts:
+    email-enabled: false
+    email-recipient: ops@mainspring.test
+    email-from: no-reply@mainspring.test
+    overdue-after-hours: 1
+    service-window-days: 14
+
+logging:
+  level:
+    org.hibernate.SQL: WARN
