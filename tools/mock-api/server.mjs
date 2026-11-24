@@ -377,7 +377,12 @@ const alertResponse = (alert) => ({ ...alert, unread: !alert.readAt });
 
 const authenticate = (req) => {
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  let token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  // Reverse proxies and sandbox preview tunnels sometimes strip Authorization.
+  // The client mirrors the token into X-Auth-Token for exactly that case.
+  if (!token && typeof req.headers['x-auth-token'] === 'string') {
+    token = req.headers['x-auth-token'];
+  }
   const payload = verify(token);
   if (!payload) return null;
   return state.users.find((u) => u.id === payload.sub) ?? null;
@@ -1087,7 +1092,12 @@ const server = createServer(async (req, res) => {
     return res.end();
   }
 
+  const started = Date.now();
   const send = (status, payload) => {
+    if (status >= 400) {
+      const auth = req.headers.authorization ? 'bearer' : req.headers['x-auth-token'] ? 'x-auth-token' : 'none';
+      console.log(`[${new Date().toISOString()}] ${status} ${req.method} ${path} auth=${auth} ${Date.now() - started}ms`);
+    }
     if (payload === null || payload === undefined) {
       res.writeHead(status);
       return res.end();

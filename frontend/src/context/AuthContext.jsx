@@ -1,17 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, session } from '../lib/api.js';
+import { api, session, SESSION_EXPIRED_EVENT } from '../lib/api.js';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => session.user);
   const [status, setStatus] = useState(() => (session.token ? 'verifying' : 'anonymous'));
+  const [sessionLost, setSessionLost] = useState(false);
 
   const applySession = useCallback((next) => {
     session.token = next.token;
     session.user = next.user;
     setUser(next.user);
     setStatus('authenticated');
+    setSessionLost(false);
   }, []);
 
   const login = useCallback(
@@ -27,6 +29,7 @@ export function AuthProvider({ children }) {
     session.clear();
     setUser(null);
     setStatus('anonymous');
+    setSessionLost(false);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -39,6 +42,7 @@ export function AuthProvider({ children }) {
       session.user = me;
       setUser(me);
       setStatus('authenticated');
+      setSessionLost(false);
       return me;
     } catch {
       session.clear();
@@ -54,10 +58,24 @@ export function AuthProvider({ children }) {
     refresh();
   }, [status, refresh]);
 
+  // If any request is told the token is dead, abandon the session immediately
+  // rather than leaving the UI half-logged-in showing raw API errors.
+  useEffect(() => {
+    const onExpired = () => {
+      session.clear();
+      setUser(null);
+      setStatus('anonymous');
+      setSessionLost(true);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       status,
+      sessionLost,
       login,
       logout,
       refresh,
@@ -66,7 +84,7 @@ export function AuthProvider({ children }) {
       isTechnician: user?.role === 'TECHNICIAN',
       canEdit: user?.role === 'ADMIN' || user?.role === 'TECHNICIAN',
     }),
-    [user, status, login, logout, refresh],
+    [user, status, sessionLost, login, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

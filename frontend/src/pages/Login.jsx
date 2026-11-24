@@ -16,7 +16,7 @@ const DEMO_ACCOUNTS = [
 ];
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, sessionLost } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -153,6 +153,15 @@ export default function Login() {
                 </button>
               </div>
             </Field>
+
+            {sessionLost && !error && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-ember-500/30 bg-ember-900/30 px-3.5 py-2.5">
+                <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0 text-ember-300" />
+                <p className="text-[13px] leading-snug text-ember-200">
+                  Your session ended. Sign in again to pick up where you left off.
+                </p>
+              </div>
+            )}
 
             {error && (
               <div className="flex items-start gap-2.5 rounded-lg border border-rust-500/30 bg-rust-900/40 px-3.5 py-2.5">

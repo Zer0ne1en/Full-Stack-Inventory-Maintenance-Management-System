@@ -8,6 +8,9 @@
 const TOKEN_KEY = 'mainspring.token';
 const USER_KEY = 'mainspring.user';
 
+/** Fired when the server rejects a token we thought was valid. */
+export const SESSION_EXPIRED_EVENT = 'mainspring:session-expired';
+
 export class ApiError extends Error {
   constructor({ status, code, message, fieldErrors, path }) {
     super(message || 'Request failed');
@@ -55,10 +58,22 @@ function buildUrl(path, params) {
   return url.toString();
 }
 
+/**
+ * Sends the token in both `Authorization` and a custom header.
+ *
+ * Some reverse proxies and sandbox preview tunnels strip `Authorization` as a
+ * security measure. The API accepts either, so the app keeps working behind
+ * them without weakening the contract.
+ */
+function authHeaders(token) {
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}`, 'X-Auth-Token': token };
+}
+
 export async function request(path, { method = 'GET', body, params, signal } = {}) {
   const headers = { Accept: 'application/json' };
   const token = session.token;
-  if (token) headers.Authorization = `Bearer ${token}`;
+  Object.assign(headers, authHeaders(token));
 
   let payload;
   if (body instanceof FormData) {
@@ -93,9 +108,18 @@ export async function request(path, { method = 'GET', body, params, signal } = {
   }
 
   if (!response.ok) {
-    if (response.status === 401 && session.token) {
-      // Token expired or revoked — drop the local session so the app routes to login.
+    // A 401 while holding a token means the token is no longer accepted —
+    // expired, revoked, or stripped in transit. Drop the local session so the
+    // router sends the user back to login instead of dead-ending on an error.
+    // The login endpoint itself is exempt: a wrong password is not a dead session.
+    const isLoginCall = path.startsWith('/auth/login');
+    if (response.status === 401 && token && !isLoginCall) {
+      console.warn(
+        `[api] 401 on ${method} ${path} — a token was attached (${token.length} chars) ` +
+          'but the API did not accept it.',
+      );
       session.clear();
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { path } }));
     }
     throw new ApiError({
       status: response.status,

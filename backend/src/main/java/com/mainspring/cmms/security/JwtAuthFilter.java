@@ -38,16 +38,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        String token = extractBearerToken(request.getHeader(HttpHeaders.AUTHORIZATION));
 
-        if (header == null || !header.startsWith(BEARER)) {
-            filterChain.doFilter(request, response);
-            return;
+        // Reverse proxies and sandbox preview tunnels sometimes strip the
+        // Authorization header. The client mirrors the token into X-Auth-Token,
+        // so accept either source rather than failing those users outright.
+        if (token == null) {
+            token = trimToNull(request.getHeader("X-Auth-Token"));
         }
 
-        String token = header.substring(BEARER.length()).trim();
-
-        if (!token.isEmpty() && SecurityContextHolder.getContext().getAuthentication() == null) {
+        if (token != null && !token.isEmpty()
+                && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 Long userId = jwtService.extractUserId(token);
                 userRepository.findById(userId).ifPresent(user -> {
@@ -66,5 +67,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String extractBearerToken(String header) {
+        if (header == null || !header.startsWith(BEARER)) {
+            return null;
+        }
+        return trimToNull(header.substring(BEARER.length()));
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
