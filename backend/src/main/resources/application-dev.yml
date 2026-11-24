@@ -1,0 +1,16 @@
+# Local development overrides: verbose SQL and a faster alert scan.
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    com.mainspring.cmms: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+
+app:
+  alerts:
+    cron: "0 */2 * * * *"   # every 2 minutes while developing
